@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:memory_game/screen/menu.dart';
+import 'package:memory_game/services/cache/shared_preferences.dart';
 
-void main() {
+
+ final RouteObserver<PageRoute> routeObserver = RouteObserver<PageRoute>();
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await CacheService.init();
+  
+
   runApp(const MyApp());
 }
 
@@ -14,6 +21,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Flutter Demo',
       debugShowCheckedModeBanner: false,
+      navigatorObservers: [routeObserver],
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,

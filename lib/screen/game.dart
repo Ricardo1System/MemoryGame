@@ -1,33 +1,54 @@
 import 'dart:async';
-import 'dart:nativewrappers/_internal/vm/lib/ffi_allocation_patch.dart';
+import 'dart:math';
 
 import 'package:flip_card/flip_card.dart';
 import 'package:flip_card/flip_card_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:memory_game/models/card_model.dart';
+import 'package:memory_game/services/cache/shared_preferences.dart';
+import 'package:memory_game/utils/constants.dart';
 
 class GameView extends StatefulWidget {
-  const GameView({super.key});
+  const GameView({super.key, required this.size});
+
+  final int size;
 
   @override
   State<GameView> createState() => _GameViewState();
 }
 
 class _GameViewState extends State<GameView> {
-      List<CardModel> cardList = [
-      CardModel(index: 0, image: "assets/images/basquet_ball.png", isActive: false, controller: FlipCardController()),
-      CardModel(index: 1, image: "assets/images/basquet_ball.png", isActive: false, controller: FlipCardController()),
-      CardModel(index: 2, image: "assets/images/soccer_ball.png", isActive: false, controller: FlipCardController()),
-      CardModel(index: 3, image: "assets/images/soccer_ball.png", isActive: false, controller: FlipCardController()),
-      CardModel(index: 4, image: "assets/images/tenis_ball.png", isActive: false, controller: FlipCardController()),
-      CardModel(index: 5, image: "assets/images/tenis_ball.png", isActive: false, controller: FlipCardController()),
-      CardModel(index: 6, image: "assets/images/voleibol_ball.png", isActive: false, controller: FlipCardController()),
-      CardModel(index: 7, image: "assets/images/voleibol_ball.png", isActive: false, controller: FlipCardController()),
-    ];
+      List<String> imageList = [
+        "assets/images/basquet_ball.png",
+        "assets/images/soccer_ball.png",
+        "assets/images/tenis_ball.png",
+        "assets/images/voleibol_ball.png"
+      ];
+      List<CardModel> cardList = [];
 
-    List<CardModel> cardsActived = [];
+void generateCards() {
+  cardList = [];
 
+  for (int i = 0; i < widget.size; i++) {
+    int imageIndex = i % imageList.length;
+    cardList.add(CardModel(
+      controller: FlipCardController(),
+      image: imageList[imageIndex],
+      isActive: false,
+    ));
+    cardList.add(CardModel(
+      controller: FlipCardController(),
+      image: imageList[imageIndex],
+      isActive: false,
+    ));
+  }
+
+  cardList.shuffle(Random());
+}
+
+    List<int> cardsActived = [];
+    int score = 0;
     bool isTime = false;
     Timer? _timer;
 
@@ -37,13 +58,24 @@ class _GameViewState extends State<GameView> {
           cardsActived.clear();
           isTime = true;
         });
-      },);
-      
+      },); 
+    }
+
+    Future<void> flipCard(int index) async {
+     await cardList[index].controller.toggleCard();
+    }
+
+    void saveHighScore(){
+      int scoreSaved = CacheService.getInteger(key: scoreConst);
+      if (score > scoreSaved) {
+        CacheService.saveData(key: scoreConst, value: score);
+      }
     }
 
     @override
     void initState() {
       startTime();
+      generateCards();
       super.initState();
     }
 
@@ -55,16 +87,26 @@ class _GameViewState extends State<GameView> {
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
-      appBar: AppBar(),
+      appBar: AppBar(
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 20),
+            child: Text('Score:  ${score.toString()}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),),
+          )
+        ],
+      ),
       body: Center(
         child: SizedBox(
-          height: MediaQuery.of(context).size.height * 0.6,
+          height:MediaQuery.of(context).size.height-90,
           width: MediaQuery.of(context).size.width,
           child: GridView.builder(
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount:  widget.size <= 6 ? 3 : 4,
+              // mainAxisSpacing: 0.0,
+              // // childAspectRatio: 1,
+              // mainAxisExtent: null,
+              // crossAxisSpacing: 0.0,
             ),
             itemCount: cardList.length,
             itemBuilder: (context, index) {
@@ -95,40 +137,41 @@ class _GameViewState extends State<GameView> {
                           style: GoogleFonts.aboreto(
                               color: Colors.white,
                               fontStyle: FontStyle.italic,
-                              fontSize: 13.0),
+                              fontSize: widget.size <= 6 ? 13.0: 8),
                           children: [
                             TextSpan(
                               text: "Game",
                               style: GoogleFonts.aDLaMDisplay(
                                   color: Colors.white,
                                   fontStyle: FontStyle.italic,
-                                  fontSize: 13.0),
+                                  fontSize: widget.size <= 6 ? 13.0: 8),
                             )
                           ])),
                     ),
                   ),
                 ),
                 flipOnTouch: cardList[index].isActive == true? false : true,
-                onFlipDone: (isFront) {
+                onFlipDone: (isFront) async {
                   if (isTime) {
                     if (!isFront) {
-                   cardsActived.add(cardList[index]);
+                   cardsActived.add(index);
                   }
                     if (isFront) {
-                   cardsActived.remove(cardList[index]);
+                   cardsActived.remove(index);
                   }
                   if (cardsActived.length == 2) {
-                    if (cardsActived.first.image == cardsActived.last.image) {
+                    if (cardList[cardsActived.first].image == cardList[cardsActived.last].image) {
                       for (var card in cardsActived) {
                         setState(() {
-                          cardList[card.index].isActive = true;
+                          score = score + 5;
+                          saveHighScore();
+                          cardList[card].isActive = true;
                         });
                       }
                     }else{
-                      setState(() {
-                        cardsActived.first.controller.state?.activate();
-                        cardsActived.last.controller.state?.isFront = false;
-                      });
+                      for (var card in cardsActived) {
+                       await flipCard(card);
+                      } 
                     }
                     cardsActived.clear();
                   }
